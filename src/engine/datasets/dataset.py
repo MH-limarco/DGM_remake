@@ -1,21 +1,32 @@
-import torch
-import pickle, os
-import numpy as np
+import os
 import os.path as osp
-from torch_geometric.datasets import Planetoid, Amazon, Coauthor
+import pickle
+import inspect
+
+import numpy as np
+import torch
 import torch_geometric.transforms as T
+from torch_geometric.utils import index_to_mask
+from torch_geometric.datasets import Planetoid, Amazon, Coauthor
 
 from src.utils import *
 
 os_sep = os.sep
-path = os.sep.join(__file__.split(os.sep)[:-3])
+path = os.sep.join(__file__.split(os.sep)[:-4])
 file_path = osp.join(path, "data")
-data_split = ["complete", "public", "full", "random"]
+
+__all__ = [#loading_function
+           "Planetoid", "Amazon", "Coauthor",
+
+           ##dataset_class
+           "TadpoleDataset",
+           "PlanetoidDataset",
+           "pyGeometricDataset"
+           ]
 
 class pickleDataset(torch.utils.data.Dataset):
     def __init__(self, name, samples_per_epoch=100):
         assert_error(name.endswith(".pickle"), ValueError, 5321)
-
         with open(f'{osp.join(file_path, name)}', 'rb') as f:
             self._load_ = pickle.load(f) # Load the data
         self.samples_per_epoch = samples_per_epoch
@@ -32,8 +43,9 @@ class TadpoleDataset(pickleDataset):
                  fold=0,
                  mode="train",
                  samples_per_epoch=100,
-                 device='cpu',
-                 full=False):
+                 full=False,
+                 **kwargs
+                 ):
 
         super().__init__(name=name, samples_per_epoch=samples_per_epoch)
         x, y, train_mask, test_mask, weight = self._load_
@@ -43,53 +55,87 @@ class TadpoleDataset(pickleDataset):
         mask = "train_mask" if mode == "train" else "test_mask" if mode in ["test", "val"] else False
         assert_error(mask, ValueError, 123)
         mask = locals()[mask]
-
-        self.x = torch.from_numpy(x[:, :, fold]).float().to(device)
-        self.y = torch.from_numpy(y[:, :, fold]).long().to(device)
+        self.x = torch.from_numpy(x[:, :, fold]).float()
+        self.y = torch.from_numpy(y[:, :, fold]).long()
         self.y = self.y if self.y.dim() == 1 else torch.argmax(self.y, dim=1)
-        self.mask = torch.from_numpy(mask[:,fold]).to(device)
-        self.weight = torch.from_numpy(np.squeeze(weight[:1, fold])).float().to(device)
+        self.mask = torch.from_numpy(mask[:,fold])
+        self.weight = torch.from_numpy(np.squeeze(weight[:1, fold])).float()
 
     def __getitem__(self, idx):
         return self.x, self.y, self.mask, [[]]
 
-class pyGeometricDataset(torch.utils.data.Dataset):
-    def __init__(self, data_load, name,
+########################################## pick_dataset END ##########################################
+class Base_pyGDataset(torch.utils.data.Dataset):
+    def __init__(self, name, data_load,
                  mode="train",
                  samples_per_epoch=100,
                  split="complete",
                  normalize=True,
                  transform=None,
-                 device='cpu',
                  train_rate=0.5,
-                 val_rate=0.25,
+                 val_rate=0.5,
+                 shuffle=True,
+                 parent=None
                  ):
-        assert_error(train_rate+val_rate < 1, ValueError, 6123)
+        assert_error(train_rate+val_rate <= 1, ValueError, 6123)
+
         self.data_load = data_load
         _load_ = self._get_dataset(name=name, split=split, normalize=normalize, transform=transform)
         mask = "train_mask" if mode == "train" else \
                "val_mask" if mode == "val" else \
-               "test_mask" if mode == "test" else \
-               "pass" if mode == "pass" else False
+               "test_mask" if mode == "test" else False
         assert_error(mask, ValueError, 123)
 
         dataset = _load_[0]
-        self.mask = getattr(dataset, mask).to(device) if mask != "pass" else False
-
         self.samples_per_epoch = samples_per_epoch
-        self.x = dataset.x.float().to(device)
-        self.y = dataset.y.long().to(device)
-        self.edge_index = dataset.edge_index.to(device)
+        self.x = dataset.x.float()
+        self.y = dataset.y.long()
+        self.edge_index = dataset.edge_index
         self.n_features = dataset.num_node_features
         self.num_classes = _load_.num_classes
 
-        if not self.mask:
+        if not (hasattr(dataset, "train_mask") or hasattr(dataset, "val_mask") or hasattr(dataset, "test_mask")):
+            if parent is None:
+                _var_ = f"{self.data_load.__name__}_sampler"
+                _build_up_ = _var_ not in globals()
+            else:
+                _var_ = "_sampler_"
+                _build_up_ = not hasattr(parent, _var_)
+
+            self.shuffle = shuffle
             self.train_rate = train_rate
             self.val_rate = val_rate
-            pass
+            if _build_up_:
+                if parent is None:
+                    globals()[_var_] = self._rand_split_mask()
+                else:
+                    setattr(parent, _var_, self._rand_split_mask())
+            if parent is None:
+                self.mask = globals()[_var_][mask]
+            else:
+                self.mask = getattr(parent, _var_)[mask]
+        else:
+            self.mask = getattr(dataset, mask)
 
     def _get_dataset(self, name, split, normalize, transform):
         raise NotImplementedError()
+
+    def _rand_split_mask(self):
+        size = self.x.size(0)
+
+        _train_ = int(size*self.train_rate)
+        _val_ = int(size*self.val_rate)
+        _test_ = True if size - _train_ - _val_ > 0 else False
+
+        full_index = torch.randperm(size) if self.shuffle else torch.arange(size)
+        train_mask = index_to_mask(full_index[:_train_], size=size)
+        val_mask = index_to_mask(full_index[_train_:_train_+_val_], size=size)
+        test_mask = index_to_mask(full_index[_train_+_val_:], size=size) if _test_ else \
+                    index_to_mask(full_index[_train_:_train_+_val_], size=size)
+
+        return {"train_mask": train_mask,
+                "val_mask": val_mask,
+                "test_mask": test_mask}
 
     def __len__(self):
         return self.samples_per_epoch
@@ -97,21 +143,21 @@ class pyGeometricDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         raise NotImplementedError()
 
-class PlanetoidDataset(pyGeometricDataset):
+class PlanetoidDataset(Base_pyGDataset):
     def __init__(self, name,
                  mode="train",
                  samples_per_epoch=100,
                  split="complete",
                  normalize=True,
                  transform=None,
-                 device='cpu',
                  **kwargs
                  ):
-        super().__init__(Planetoid, name, mode,
+        super().__init__(name, Planetoid, mode,
                          samples_per_epoch,
                          split, normalize,
-                         transform, device)
+                         transform, **kwargs)
     def _get_dataset(self, name, split, normalize, transform):
+        #assert split in ["complete", "public", "full", "random"]
         if split == "complete":
             dataset = self.data_load(file_path, name)
             dataset[0].train_mask.fill_(False)
@@ -133,23 +179,22 @@ class PlanetoidDataset(pyGeometricDataset):
     def __getitem__(self, idx):
         return self.x, self.y, self.mask, self.edge_index
 
-class AmazonDataset(pyGeometricDataset):
-    def __init__(self, name,
-                 mode="pass",
+class pyGeometricDataset(Base_pyGDataset):
+    def __init__(self, name, data_func,
+                 mode="train",
                  samples_per_epoch=100,
                  split="complete",
                  normalize=True,
                  transform=None,
-                 device='cpu',
-                 train_rate=0.5,
+                 train_rate=0.7,
                  val_rate=0.25,
+                 shuffle=True,
+                 **kwargs
                  ):
-        super().__init__(Amazon, name, mode,
+        super().__init__(name, data_func, mode,
                          samples_per_epoch,
-                         split, normalize,
-                         transform, device,
-                         train_rate, val_rate)
-
+                         split, normalize,transform,
+                         train_rate, val_rate, shuffle, **kwargs)
     def _get_dataset(self, name, split, normalize, transform):
         dataset = self.data_load(file_path, name)
         if transform is not None and normalize:
@@ -165,7 +210,18 @@ class AmazonDataset(pyGeometricDataset):
 
 if __name__ == "__main__":
     print(TadpoleDataset(full=True).y.shape)
-    print(AmazonDataset("Photo").x.shape)
+    print(PlanetoidDataset("Cora", mode="train").mask.sum())
+
+    pyGeometricDataset("Photo", Amazon, mode="train")
+    print(Amazon_sampler['val_mask'].sum(), Amazon_sampler['test_mask'].sum())
+    pyGeometricDataset("Photo", Amazon, mode="test")
+    print(Amazon_sampler['val_mask'].sum(), Amazon_sampler['test_mask'].sum())
+
+    pyGeometricDataset("CS", Coauthor, mode="train")
+    print(Coauthor_sampler['val_mask'].sum(), Coauthor_sampler['test_mask'].sum())
+
+
+
 
 
 
