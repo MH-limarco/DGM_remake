@@ -7,7 +7,6 @@ from src.utils.utils import *
 class base_Module(nn.Module):
     def __init__(self, *args, **kwargs):
         super(base_Module, self).__init__()
-        self.i = 0
 
     def _reset_parameters(self, module):
         for name, submodule in module.named_children():
@@ -17,7 +16,8 @@ class base_Module(nn.Module):
 
         if hasattr(module, 'reset_parameters'):
             module.reset_parameters()
-    def forward(self, data):
+
+    def forward(self, x, A=None):
         raise NotImplementedError()
 
 
