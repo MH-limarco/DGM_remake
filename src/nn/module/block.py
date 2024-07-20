@@ -1,38 +1,53 @@
+from collections.abc import Iterable
 from torch import nn
+from torch_geometric import nn as pyGnn
 import torch
 
+from src.nn.module import *
 from src.nn.module.layer import *
-from collections.abc import Iterable
+from src.utils.utils import *
 
-class MLP(base_Module):
-    def __init__(self, in_features, out_features, reset_parameters=True):
+
+class MLP(Module):
+    def __init__(self, in_features, out_features, act=None, drop_out=0.0, output_act=False, reset_parameters=True):
         super(MLP, self).__init__()
         _features_ = [in_features] + (out_features if isinstance(out_features, Iterable) else [out_features])
+        self.output_act = output_act
         self.fc = nn.ModuleList()
         for _i, _o in zip(_features_[:-1], _features_[1:]):
-            self.fc.append(nn.Linear(in_features=_i, out_features=_o))
+            self.fc.append(Linear(in_features=_i, out_features=_o, act=act, drop_out=drop_out))
+        self._last_layer_()
 
         if reset_parameters:
             self._reset_parameters(self)
 
-    def forward(self, x, A=None):
+    def forward(self, x, edge_index=None):
         for conv in self.fc:
-            x = conv(x)
+            x = conv(x, edge_index)
         return x
 
+    def _last_layer_(self):
+        self.fc[-1].dropout = nn.Identity()
+        self.fc[-1].drop_out = 0.0
+        if not self.output_act:
+            self.fc[-1].act = activation(False)
 
-class Identity(nn.Module):
-    def __init__(self, param_idx=None):
-        super(Identity, self).__init__()
-        self.param_idx = param_idx
+class JumpingKnowledge(pyGnn.JumpingKnowledge):
+    def __init__(self, mode, channels, num_layers):
+        super().__init__(**args2dict())
 
-    def forward(self, *params):
-        if self.param_idx is not None:
-            return params[self.param_idx]
+    def forward(self, *xs):
+        return super().forward(xs)
 
-        return params
-
-
+__all__ = auto_all()
 
 if __name__ == "__main__":
-    MLP(10, [20,30,40,10])
+    import torch
+    from torch_geometric import nn as pyGnn
+    from src.nn.module.layer import *
+    x = torch.rand((64, 10))
+    edge_index = torch.randint(64, size=(2, 20))
+
+    _test_0 = GCNConv(10, 1000, act=False, drop_out=0.3)
+    _test_1 = MLP(1000, [20, 30, 40, 10], act=None, drop_out=0.3)
+

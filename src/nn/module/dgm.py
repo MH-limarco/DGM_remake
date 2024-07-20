@@ -1,57 +1,48 @@
 import torch
 from torch import nn
 from pykeops.torch import LazyTensor
+
+from src.nn.module import *
 from src.nn.module.distances import *
+from src.utils.utils import *
 
-class dDGM(nn.Module):
-    def __init__(self, embed_f, k=5, distance="euclidean", sparse=True):
+class dDGM(Module):
+    debug = False
+    def __init__(self, k=5, distance="euclidean", sparse=True):
         super(dDGM, self).__init__()
-
-        self.sparse =sparse
-
+        self.sparse = sparse
         self.temperature = nn.Parameter(torch.tensor(1. if distance == "hyperbolic" else 4.).float())
-        self.embed_f = embed_f
         self.centroid =None
         self.scale =None
         self.k = k
         self.distance = distance
 
-        self.debug =False
+        self._reset_parameters(self)
 
-    def forward(self, x, A, not_used=None, fixedges=None):
-        if x.shape[0] == 1:
-            x = x[0]
+    def forward(self, x, edge_index=None, not_used=None, fixedges=None):
+        #if x.shape[0] == 1:
+        #    x = x[0]
 
-        x = self.embed_f(x ,A)
+#randuniform
+        #curand_uniform
+
+# include <curand.h>
+# include <curand_kernel.h>
+
+
+        #x = self.embed_f(x , edge_index)
         if x.dim() == 2:
             x = x[None ,...]
 
-        if self.training:
-            if fixedges is not None:
-                return x, fixedges, torch.zeros(fixedges.shape[0] ,fixedges.shape[-1 ]//self.k,self.k
-                                                ,dtype=torch.float ,device=x.device)
-            # sampling here
-            edges_hat, logprobs = self.sample_without_replacement(x)
+        if fixedges is not None:
+            return x, fixedges, torch.zeros(fixedges.shape[0] ,fixedges.shape[-1]//self.k, self.k
+                                            ,dtype=torch.float)
 
-        else:
-            with torch.no_grad():
-                if fixedges is not None:
-                    return x, fixedges, torch.zeros(fixedges.shape[0] ,fixedges.shape[-1 ] // self.k, self.k
-                                                    ,dtype=torch.float ,device=x.device)
-                # sampling here
-                edges_hat, logprobs = self.sample_without_replacement(x)
-
+        edges_hat, logprobs = self.sample_without_replacement(x)
         if self.debug:
-            if self.distance == "euclidean":
-                D, _x = euclidean_distances(x)
-            elif self.distance == "hyperbolic":
-                D, _x = poincare_distances(x)
-
-            self.D = (D * torch.exp(torch.clamp(self.temperature ,-5 ,5))).detach().cpu()
-            self.edges_hat =edges_hat.detach().cpu()
-            self.logprobs =logprobs.detach().cpu()
-
-        return x, edges_hat, logprobs
+            self._debug_()
+        #return x, edges_hat, logprobs
+        return x, edges_hat
 
 
     def sample_without_replacement(self, x):
@@ -62,6 +53,7 @@ class dDGM(nn.Module):
 
             mD = ((G_i - X_j) ** 2).sum(-1)
 
+
             # argKmin already add gumbel noise
             lq = mD * torch.exp(torch.clamp(self.temperature ,-5 ,5))
             indices = lq.argKmin(self.k, dim=1)
@@ -70,7 +62,6 @@ class dDGM(nn.Module):
             x2 = x[: ,: ,None ,:].repeat(1 ,1 ,self.k ,1).view(x.shape[0] ,-1 ,x.shape[-1])
             logprobs = (-(x1 - x2).pow(2).sum(-1) * torch.exp(torch.clamp(self.temperature ,-5 ,5))).reshape(x.shape[0]
                                                                                                              ,-1 ,self.k)
-
         if self.distance == "hyperbolic":
             pass
             x_norm = (x ** 2).sum(-1 ,keepdim=True)
@@ -116,16 +107,25 @@ class dDGM(nn.Module):
 
         return edges, logprobs
 
+    def _debug_(self):
+        if self.distance == "euclidean":
+            D, _x = euclidean_distances(x)
+        elif self.distance == "hyperbolic":
+            D, _x = poincare_distances(x)
 
-class cDGM(nn.Module):
+        self.D = (D * torch.exp(torch.clamp(self.temperature, -5, 5))).detach().cpu()
+        #self.edges_hat = edges_hat.detach().cpu()
+        #self.logprobs = logprobs.detach().cpu()
+
+
+class cDGM(Module):
     input_dim = 4
     debug = False
 
-    def __init__(self, embed_f, k=None, distance="euclidean"):
+    def __init__(self, k=None, distance="euclidean"):
         super(cDGM, self).__init__()
         self.temperature = nn.Parameter(torch.tensor(1).float())
         self.threshold = nn.Parameter(torch.tensor(0.5).float())
-        self.embed_f = embed_f
         self.centroid = None
         self.scale = None
         self.distance = distance
@@ -133,9 +133,11 @@ class cDGM(nn.Module):
         self.scale = nn.Parameter(torch.tensor(-1).float(), requires_grad=False)
         self.centroid = nn.Parameter(torch.zeros((1, 1, cDGM.input_dim)).float(), requires_grad=False)
 
-    def forward(self, x, A, not_used=None, fixedges=None):
+        self._reset_parameters(self)
 
-        x = self.embed_f(x, A)
+    def forward(self, x, edge_index=None, not_used=None, fixedges=None):
+
+        #x = self.embed_f(x, edge_index)
 
         # estimate normalization parameters
         if self.scale < 0:
@@ -153,4 +155,53 @@ class cDGM(nn.Module):
             self.A = A.data.cpu()
             self._x = _x.data.cpu()
 
-        return x, A, None
+        #return x, edge_index, None
+        return x, edge_index
+
+
+__all__ = auto_all()
+
+if __name__ == "__main__":
+    from src.nn.module.attention import *
+    from src.nn.module.block import *
+    from torch_geometric import nn as pyGnn
+    from src.nn.module.layer import *
+
+
+    x = torch.rand((64, 10)).cpu()
+    edge_index = torch.randint(64, size=(2, 20)).cpu()
+
+    #x, edges_hat = dDGM(SGFormer(10, 1024, 1), 5)(x, edge_index)
+    _test_0a = SGFormer(10, 512, 1)
+    _test_0b = dDGM(5)
+    _test_1a = GCNConv(512, 512, act=False, drop_out=0.3)
+    _test_1b = GCNConv(512, 512, act=False, drop_out=0.3)
+    _test_1c = GCNConv(512, 256, act=False, drop_out=0.3)
+    _test_2 = MLP(512+512+256, [20, 30, 40, 10], act=None, drop_out=0.3)
+
+    _List_ = pyGnn.Sequential("x, edge_index",
+                              [(_test_0a, "x, edge_index -> x"),
+                               (_test_0b, "x, edge_index -> x, edge_index"),
+                               (_test_1a, "x, edge_index -> x1"),
+                               (_test_1b, "x1, edge_index -> x2"),
+                               (_test_1c, "x2, edge_index -> x3"),
+                               (JumpingKnowledge("cat", 64, num_layers=2), 'x1, x2, x3 -> x'),
+                               (_test_2, "x, edge_index -> x"),
+                               ]).cpu()
+
+    _test_ = _List_
+    _test_ = pyGnn.summary(_test_, x, edge_index, max_depth=1)
+    print(_test_)
+
+
+
+
+
+
+    from keopscore.utils.code_gen_utils import *
+    #print(c_random("float"))
+    #print(infinity("float"))
+
+
+    #aa = nn.ModuleList([dDGM(SGFormer(10, 1024, 1), 5), GCNConv(1024, 1024), MLP(1024, [1024, 10])])
+

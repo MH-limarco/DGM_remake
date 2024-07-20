@@ -14,10 +14,10 @@ def assert_error(Bool, error, message=None):
             raise error(message)
         else:
             raise error()
-def args2dict():
+def args2dict(check=True):
     frame_func = inspect.currentframe().f_back
     args, _, _, values = inspect.getargvalues(frame_func)
-    return {arg: values[arg] for arg, val in zip(args, values) if 'self' != arg}
+    return {arg: values[arg] for arg, val in zip(args, values) if 'self' != arg or not check}
 
 def apply_args(parent, kargs=None):
     frame_func = inspect.currentframe().f_back
@@ -35,27 +35,18 @@ def apply_kwargs(parent, kargs):
     for arg, value in kargs.items():
         setattr(parent, arg, value)
 
-def _with_caller_name(func):
-    def wrapper():
+def __with_caller_name__(func):
+    def wrapper(check=True):
         caller_frame = inspect.stack()[1]
         caller_name = caller_frame.frame.f_globals['__name__']
-        return func(caller_name)
+        return func(caller_name, check)
     return wrapper
 
-@_with_caller_name
-def auto_all(_name_):
+@__with_caller_name__
+def auto_all(_name_, check=True):
     current_module = sys.modules[_name_]
     return [name for name, obj in inspect.getmembers(current_module)
-            if callable(obj) and obj.__module__ == _name_ and not name.startswith('_')]
+            if callable(obj) and obj.__module__ == _name_ and (not name.startswith('_') if check else not name.startswith('__'))]
 
 
-__all__ = auto_all()
-
-if __name__ == '__main__':
-    class test_class:
-        def __init__(self, d=None):
-            print(args2dict())
-            apply_args(self, d)
-            print(f"self.test: {self.test}\n"
-                  f"self.val: {self.val}")
-    test_class({'test':1, 'val':2})
+__all__ = auto_all(False)

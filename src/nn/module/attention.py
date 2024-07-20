@@ -2,11 +2,11 @@ import torch
 from torch import nn
 from torch_geometric.nn import SimpleConv
 
-from src.nn.module.layer import *
+from src.nn.module import Module
 from src.nn.module.block import *
 from src.utils.utils import *
 
-class SGFormer(base_Module):
+class SGFormer(Module):
     def __init__(self, in_features, out_features, num_heads, use_weight=True, res=True, output_attn=False):
         super(SGFormer, self).__init__()
         apply_args(self)
@@ -19,7 +19,7 @@ class SGFormer(base_Module):
 
         self._reset_parameters(self)
 
-    def forward(self, x, A=None):
+    def forward(self, x, edge_index=None):
         query = self.qs(x).reshape(-1, self.num_heads, self.out_features)
         key = self.ks(x).reshape(-1, self.num_heads, self.out_features)
 
@@ -32,7 +32,7 @@ class SGFormer(base_Module):
         if self.res:
             final_output += value.squeeze(1) if self.num_heads <= 1 else value.mean(dim=1).squeeze(1)
 
-        return self.fc(final_output).unsqueeze(0)
+        return self.fc(final_output, edge_index)
 
     def attention(self, qs, ks, vs):
         """
@@ -81,7 +81,7 @@ class P_SGFormer(SGFormer):
         super(P_SGFormer, self).__init__(**args2dict())
         self.conv = SimpleConv(aggr='mean', combine_root='self_loop')
 
-    def forward(self, x, A=None):
+    def forward(self, x, edge_index=None):
         query = self.qs(x).reshape(-1, self.num_heads, self.out_features)
         key = self.ks(x).reshape(-1, self.num_heads, self.out_features)
 
@@ -100,13 +100,12 @@ class P_SGFormer(SGFormer):
         return self.fc(final_output).unsqueeze(0)
 
 
-
 __all__ = auto_all()
 
 if __name__ == "__main__":
     _in = torch.rand((64, 10))
     a = SGFormer(10, 1024, 1)(_in, [[]])
-    print(a.shape)
+    print(a)
 
-    a = P_SGFormer(10, 1024, 1)(_in, [[]])
-    print(a.shape)
+    #a = P_SGFormer(10, 1024, 1)(_in, [[]])
+    #print(a)
