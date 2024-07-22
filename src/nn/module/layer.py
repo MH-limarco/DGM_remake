@@ -36,6 +36,7 @@ class pyGConv(Module):
         self.conv.reset_parameters()
 
     def forward(self, x, edge_index):
+        assert edge_index.size(1) > 0
         return self.dropout(self.act(self.conv(x, edge_index)))
 
     def __repr__(self) -> str:
@@ -72,8 +73,6 @@ class APPNP(pyGConv):
         self.reset_parameters()
 
 
-
-
 __all__ = auto_all()
 
 if __name__ == "__main__":
@@ -83,6 +82,6 @@ if __name__ == "__main__":
     _test_ = GCNConv(10, 1000, act=False, drop_out=0.3)
     _test_ = APPNP(10, 10, 0.5, act=False, drop_out=0.3)
     _test_ = GatedGraphConv(10, 1000, 8, act=False, drop_out=0.3)
-    print(pyGnn.summary(_test_, x, edge_index, max_depth=3))
+    print(pyGnn.summary(_test_, x, edge_index, max_depth=10))
     print(_test_)
 

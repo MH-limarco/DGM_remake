@@ -45,10 +45,21 @@ class pl_DataModule(pl.LightningDataModule):
             kwargs.update({"mode": "val", "samples_per_epoch": 1})
             self.val_set = _dataset_(parent=self, **kwargs)
 
+            if not hasattr(self, "in_c"):
+                self.in_c = self.train_set.n_features
+
+            if not hasattr(self, "nc"):
+                self.nc = self.train_set.num_classes
+
         elif stage in ["test", "predict"]:
             kwargs.update({"mode": "test", "samples_per_epoch": 1})
             self.eval_set = _dataset_(parent=self, **kwargs)
 
+            if not hasattr(self, "in_c"):
+                self.in_c = self.eval_set.n_features
+
+            if not hasattr(self, "nc"):
+                self.nc = self.eval_set.num_classes
     def train_dataloader(self):
         return DataLoader(self.train_set, batch_size=self.batch_size, num_workers=self.num_workers)
 
@@ -66,3 +77,4 @@ if __name__ == "__main__":
     _test_ = pl_DataModule("tadpole")
     _test_.setup("test")
     _test_.setup("fit")
+    print(_test_.in_c, _test_.nc)

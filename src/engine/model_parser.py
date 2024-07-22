@@ -33,7 +33,7 @@ def _alignment_path_(path_format):
         if root_f == 'norm' and path_f == 'wsl':
             PATH = os.path.join(f"{path_format[1][0].upper()}:{os.sep}", *path_format[2:])
         elif root_f == 'wsl' and path_f == 'norm':
-            PATH = os.path.join(env_format, path_format[0][0].lower(), *path_format[1:])
+            PATH = os.path.join(env_format[0], path_format[0][0].lower(), *path_format[1:])
         else:
             PATH = os.path.join(*path_format)
     else:
@@ -75,13 +75,15 @@ def parser(PATH, in_c, nc=None):
 
         if m in ['dDGM']:
             output_edge = True
+            arg_i += [arg_i[-1]]
 
         elif m in ['JumpingKnowledge']:
             input_edge = False
-            arg_i += [sum([arg_i[i] for i in f])]
+            arg_i += [sum([arg_i[i if i == -1 else i+1] for i in f])]
 
         elif m in ["APPNP", "GatedGraphConv"]:
-
+            if f != -1:
+                f += 1
             if m == "APPNP":
                 args.insert(0, arg_i[f])
                 arg_i += [arg_i[f]]
@@ -89,10 +91,8 @@ def parser(PATH, in_c, nc=None):
                 args.insert(0, arg_i[f])
                 arg_i += [args[1] if not isinstance(args[1], Iterable) else args[1][-1]]
 
-
-
         else:
-            args.insert(0, arg_i[f])
+            args.insert(0, arg_i[f if f == -1 else f+1])
             arg_i += [args[1] if not isinstance(args[1], Iterable) else args[1][-1]]
 
         input_edges.append(input_edge)
@@ -127,7 +127,6 @@ def seq(model, save_idx, from_idx, input_edges, output_edges):
 
         _out_ = [x_l] if not o_edge else [x_l, A_l]
         s = f"{','.join(_in_)} -> {','.join(_out_)}"
-        print(s)
         _seq_.append((m, s))
 
     return pyGnn.Sequential(','.join([f"{x}{0}", f"{A}{0}"]), _seq_)
@@ -138,13 +137,16 @@ if __name__ == "__main__":
     #path = r"N:\python-code\DGM_v2\src\cfg\test.yaml"
     #path = r"/mnt/n/python-code\DGM_v2\src\cfg\test.yaml"
     path = r"test2.yaml"
+    use_edge = False
 
     in_dim = 10
-    x = torch.rand((64, in_dim)).cpu()
-    edge_index = torch.randint(64, size=(2, 20)).cpu()
+    edge_num = 100
+
+    x = torch.rand((64, in_dim))
+    edge_index = torch.randint(64, size=(2, edge_num if use_edge else 0))
 
     _test_ = parser(path, in_dim)
-    _test_ = pyGnn.summary(_test_, x, edge_index, max_depth=1)
+    _test_ = pyGnn.summary(_test_, x, edge_index, max_depth=5)
     print(_test_)
 
     #path = r"src/cfg/test.yaml"

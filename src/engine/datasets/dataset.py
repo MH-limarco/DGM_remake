@@ -50,7 +50,7 @@ class TadpoleDataset(pickleDataset):
         super().__init__(name=name, samples_per_epoch=samples_per_epoch)
         x, y, train_mask, test_mask, weight = self._load_
         if not full:
-            x = x[..., :30, :] # For DGM we use modality 1 (M1) for both node representation and graph learning.
+            x = x[..., :30, :] # For dgm we use modality 1 (M1) for both node representation and graph learning.
 
         mask = "train_mask" if mode == "train" else "test_mask" if mode in ["test", "val"] else False
         assert_error(mask, ValueError, 123)
@@ -60,6 +60,8 @@ class TadpoleDataset(pickleDataset):
         self.y = self.y if self.y.dim() == 1 else torch.argmax(self.y, dim=1)
         self.mask = torch.from_numpy(mask[:,fold])
         self.weight = torch.from_numpy(np.squeeze(weight[:1, fold])).float()
+        self.n_features = self.x.size(1)
+        self.num_classes = len(self.y.unique())
 
     def __getitem__(self, idx):
         return self.x, self.y, self.mask, [[]]
@@ -219,6 +221,9 @@ if __name__ == "__main__":
 
     pyGeometricDataset("CS", Coauthor, mode="train")
     print(Coauthor_sampler['val_mask'].sum(), Coauthor_sampler['test_mask'].sum())
+
+    print(TadpoleDataset(full=True).num_classes)
+    print(TadpoleDataset(full=True).edge_index)
 
 
 
