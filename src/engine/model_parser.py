@@ -148,6 +148,3 @@ if __name__ == "__main__":
     _test_ = parser(path, in_dim)
     _test_ = pyGnn.summary(_test_, x, edge_index, max_depth=5)
     print(_test_)
-
-    #path = r"src/cfg/test.yaml"
-    #read_yaml(path)

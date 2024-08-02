@@ -36,7 +36,7 @@ class pyGConv(Module):
         self.conv.reset_parameters()
 
     def forward(self, x, edge_index):
-        assert edge_index.size(1) > 0
+        assert edge_index != [[]]
         return self.dropout(self.act(self.conv(x, edge_index)))
 
     def __repr__(self) -> str:

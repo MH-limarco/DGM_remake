@@ -34,7 +34,7 @@ class pickleDataset(torch.utils.data.Dataset):
     def __len__(self):
         return self.samples_per_epoch
 
-    def __getitem__(self, idx):
+    def __getitem__(self):
         raise NotImplementedError()
 
 class TadpoleDataset(pickleDataset):
@@ -58,7 +58,7 @@ class TadpoleDataset(pickleDataset):
         self.x = torch.from_numpy(x[:, :, fold]).float()
         self.y = torch.from_numpy(y[:, :, fold]).long()
         self.y = self.y if self.y.dim() == 1 else torch.argmax(self.y, dim=1)
-        self.mask = torch.from_numpy(mask[:,fold])
+        self.mask = torch.from_numpy(mask[:,fold]).bool()
         self.weight = torch.from_numpy(np.squeeze(weight[:1, fold])).float()
         self.n_features = self.x.size(1)
         self.num_classes = len(self.y.unique())
@@ -223,7 +223,9 @@ if __name__ == "__main__":
     print(Coauthor_sampler['val_mask'].sum(), Coauthor_sampler['test_mask'].sum())
 
     print(TadpoleDataset(full=True).num_classes)
-    print(TadpoleDataset(full=True).edge_index)
+    a = TadpoleDataset(full=True)
+    b = pyGeometricDataset("Photo", Amazon, mode="train")
+    print(a.y.dtype, b.y.dtype)
 
 
 

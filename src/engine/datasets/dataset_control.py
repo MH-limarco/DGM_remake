@@ -1,4 +1,5 @@
 import pytorch_lightning as pl
+from lightning.pytorch.trainer.states import TrainerFn
 from torch.utils.data import DataLoader
 
 from src.engine.datasets.dataset import *
@@ -27,18 +28,19 @@ api_dict = {"tadpole"   :[TadpoleDataset,
 
 class pl_DataModule(pl.LightningDataModule):
     def __init__(self, data_name, batch_size=1, num_workers=4):
+        super().__init__()
         self.data_name = data_name.lower()
         self.batch_size = batch_size
         self.num_workers = num_workers
 
     def setup(self, stage):
-        self._load_data(stage)
+        self._load_data(stage if isinstance(stage, str) else stage())
 
     def _load_data(self, stage):
         _dataset_, _kwargs_ = api_dict[self.data_name]
         kwargs = _kwargs_.copy()
 
-        if stage == "fit":
+        if stage in ["fit", TrainerFn.FITTING]:
             kwargs.update({"mode": "train", "samples_per_epoch": 100})
             self.train_set = _dataset_(parent=self, **kwargs)
 
@@ -51,7 +53,7 @@ class pl_DataModule(pl.LightningDataModule):
             if not hasattr(self, "nc"):
                 self.nc = self.train_set.num_classes
 
-        elif stage in ["test", "predict"]:
+        elif stage in ["test", "predict", TrainerFn.TESTING, TrainerFn.PREDICTING]:
             kwargs.update({"mode": "test", "samples_per_epoch": 1})
             self.eval_set = _dataset_(parent=self, **kwargs)
 
@@ -77,4 +79,8 @@ if __name__ == "__main__":
     _test_ = pl_DataModule("tadpole")
     _test_.setup("test")
     _test_.setup("fit")
-    print(_test_.in_c, _test_.nc)
+    loader = _test_.train_dataloader()
+    print(_test_.train_set)
+    for i in loader:
+        pass
+    #next(iter(loader))

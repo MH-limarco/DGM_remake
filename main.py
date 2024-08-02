@@ -1,6 +1,9 @@
 from src import DGM
 
 if __name__ == "__main__":
-    model = DGM(yaml="test_e.yaml",
+    model = DGM(yaml="test2.yaml",
                 dataset="tadpole", #tadpole, cora...
-                full=False)
+                full=True)
+
+    model.fit()
+
