@@ -1,0 +1,21 @@
+# Parameters
+nc: 100 # number of classes
+activation: SELU
+
+scales:
+  # [depth, width, max_channels]
+  n: [1.00, 1024]
+  s: [1.25, 1024]
+  m: [1.50, 1024]
+  l: [2.00, 1024]
+
+dgm:
+  - [-1, P_SGFormer, [128, 1]] # 0-P1/2     #1
+  - [-1, dDGM, [5]] #
+
+gnn:
+  - [-1, GCNConv, [128, 'ReLU', 0.2]]   # 2
+  - [-1, GCNConv, [256, True, 0.6]]   # 3
+
+head:
+  - [-1, Classify, [nc]] # Classify    #1

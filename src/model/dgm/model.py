@@ -3,15 +3,16 @@ import copy
 from src.engine.model import _Model_
 from src.engine.datasets.dataset_control import pl_DataModule
 from src.engine.model_parser import parser
+from src.utils.utils import args2dict
 
 import torch
 import torch.nn.functional as F
 from torch_geometric import nn as pyGnn
 
 class DGM(_Model_):
-    def __init__(self, yaml, dataset, full=False):
-        super().__init__(yaml=yaml, dataset=dataset, full=full)
-        self._loss_ = torch.nn.CrossEntropyLoss()
+    def __init__(self, yaml, dataset, full=False, **kwargs):
+        super(DGM, self).__init__(yaml=yaml, dataset=dataset, full=full, **kwargs)
+        self.loss_function = torch.nn.CrossEntropyLoss()
 
     def _setup_(self):
         self.DataModule = pl_DataModule(self.dataset)
@@ -42,7 +43,7 @@ class DGM(_Model_):
         return optimizer
 
     def loss(self, pred, y):
-        loss = self._loss_(pred, y)
+        loss = self.loss_function(pred, y)
         return loss
 
     def training_step(self, train_batch, batch_idx):
@@ -65,7 +66,8 @@ class DGM(_Model_):
         pred = self(x, edges)
 
         loss, acc = self.pred_meter(pred, y, mask)
-        #return loss
+        self.log_dict({"val_loss":loss, "val_acc":acc})
+        #return {"loss"}
 
     def test_step(self, train_batch, batch_idx):
         x, y, mask, edges = train_batch
@@ -76,6 +78,7 @@ class DGM(_Model_):
         pred = self(x, edges)
 
         loss, acc = self.pred_meter(pred, y, mask)
+
         #return loss
 
 

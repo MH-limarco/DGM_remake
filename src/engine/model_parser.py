@@ -12,6 +12,7 @@ import torch
 import torch.nn as nn
 from torch_geometric import nn as pyGnn
 
+from src.nn.module import *
 from src import get_project_root
 from src import nn as DGMnn
 
@@ -52,8 +53,10 @@ def read_yaml(PATH):
 
     _model_dict = {"model": []}
     _model_dict['nc'] = _yaml_dict.pop('nc')
-    _model_dict['activation'] = _yaml_dict.pop('activation')
     _model_dict['scales'] = _yaml_dict.pop('scales')
+    if _yaml_dict.get("activation"):
+        _model_dict['activation'] = _yaml_dict.pop('activation')
+
     for blocks in _yaml_dict.values():
         _model_dict['model'] += blocks
 
@@ -63,6 +66,10 @@ def read_yaml(PATH):
 def parser(PATH, in_c, nc=None):
     arg_i = copy.deepcopy([in_c])
     model_dict = read_yaml(PATH)
+    if model_dict.get("activation"):
+        Module.default_act = activation(model_dict["activation"])
+        print(Module.default_act)
+
     if nc is not None:
         model_dict['nc'] = nc
 
@@ -134,8 +141,8 @@ def seq(model, save_idx, from_idx, input_edges, output_edges):
 
 
 if __name__ == "__main__":
-    #path = r"N:\python-code\DGM_v2\src\cfg\test.yaml"
-    #path = r"/mnt/n/python-code\DGM_v2\src\cfg\test.yaml"
+    #path = r"N:\python-code\DGM_v2\src\cfg\att.yaml"
+    #path = r"/mnt/n/python-code\DGM_v2\src\cfg\att.yaml"
     path = r"test2.yaml"
     use_edge = False
 

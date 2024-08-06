@@ -94,8 +94,8 @@ class P_SGFormer(SGFormer):
         if self.res:
             final_output += value.squeeze(1) if self.num_heads <= 1 else value.mean(dim=1).squeeze(1)
 
-        if not self.training and not (a is not None or len(a) > 0):
-            final_output = self.conv(final_output, a)
+        if not self.training and len(edge_index) > 0:
+            final_output = self.conv(final_output, edge_index)
 
         return self.fc(final_output).unsqueeze(0)
 
